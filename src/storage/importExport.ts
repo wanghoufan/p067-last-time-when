@@ -15,6 +15,14 @@ export const BACKUP_SCHEMA_VERSION = 1;
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 
 const MAX_NAME_LENGTH = 100;
+
+export function backupFileName(date: Date): string {
+  const pad = (value: number, width = 2): string => String(value).padStart(width, '0');
+  return `whenlast-backup-${pad(date.getFullYear(), 4)}${pad(date.getMonth() + 1)}${pad(
+    date.getDate(),
+  )}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}.json`;
+}
+
 const THEMES = new Set<ThemePreference>(['LIGHT', 'DARK', 'SYSTEM']);
 const LANGUAGES = new Set<LanguagePreference>(['FOLLOW_SYSTEM', 'zh-CN', 'en']);
 

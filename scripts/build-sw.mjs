@@ -95,6 +95,22 @@ async function main() {
     fail(manifestProblems);
   }
 
+  // PWA 可安装性的硬前提：index.html 必须引用 manifest 与苹果触控图标，且必须用相对路径（子路径部署）。
+  const indexHtml = await readFile(INDEX, 'utf8');
+  const indexProblems = [];
+  const manifestLink = /<link[^>]+rel=["']manifest["'][^>]*>/i.exec(indexHtml);
+  if (!manifestLink) {
+    indexProblems.push('index.html 缺少 <link rel="manifest">，浏览器不会把它当作可安装 PWA');
+  } else if (/href=["']\//.test(manifestLink[0]) || /href=["']https?:/i.test(manifestLink[0])) {
+    indexProblems.push(`manifest 链接必须是相对路径（子路径部署会 404）：${manifestLink[0]}`);
+  }
+  if (!/<link[^>]+rel=["']apple-touch-icon["'][^>]*>/i.test(indexHtml)) {
+    indexProblems.push('index.html 缺少 <link rel="apple-touch-icon">');
+  }
+  if (indexProblems.length > 0) {
+    fail(indexProblems);
+  }
+
   const template = await readFile(TEMPLATE, 'utf8');
   if (!template.includes(PRECACHE_MARKER)) {
     fail(`public/sw.js 缺少预缓存占位标记 ${PRECACHE_MARKER}`);

@@ -737,6 +737,19 @@ button {
   overflow-wrap: anywhere;
 }
 
+.migration-steps {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.migration-steps li {
+  margin-bottom: 6px;
+}
+
+.migration-steps li:last-child {
+  margin-bottom: 0;
+}
+
 .file-field {
   margin-top: 4px;
 }

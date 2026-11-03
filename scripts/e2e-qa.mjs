@@ -160,6 +160,13 @@ async function writeResult() {
     ['AC-08', '导出触发下载并保存'],
     ['AC-08', '导入导出文件：预检统计可见且条数一致'],
     ['AC-08', '坏 JSON 明确失败且原数据条数不变'],
+    ['AC-27', '导出文件名含秒级时间戳且内容与本机一致'],
+    ['AC-27', '下载提示明确需到下载项确认并另存'],
+    ['AC-28', '恢复预检同时显示备份与本机数量'],
+    ['AC-28', '取消预检不改动本机数据'],
+    ['AC-28', '超大文件、未来日期备份被拒绝且不改数据'],
+    ['AC-29', '备份再次恢复后事项/记录/间隔一致'],
+    ['AC-32', '备份入口与换机指引可见且不承诺永久保存'],
     ['AC-09', '切 DARK 生效并刷新保持'],
     ['AC-09', '切 LIGHT 生效'],
     ['AC-09', 'SYSTEM + 系统深色解析 dark，切回 light'],
@@ -384,11 +391,11 @@ async function chooseRadio(name, value) {
   }
 }
 
-async function downloadBackup() {
+async function downloadBackup(targetName = 'AC-08-1-export.json') {
   const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
-  await page.locator('.settings button').filter({ hasText: '导出' }).first().click();
+  await page.locator('.settings .settings-actions button').first().click();
   const download = await downloadPromise;
-  const target = path.join(EVIDENCE, 'AC-08-1-export.json');
+  const target = path.join(EVIDENCE, targetName);
   await download.saveAs(target);
   const failure = await download.failure();
   ensure(!failure, `下载失败：${failure || ''}`);
@@ -939,6 +946,187 @@ async function main() {
     return `坏导入前后均为 items=${counts.items}, events=${counts.events}`;
   });
 
+  await check('AC-27', '导出文件名含秒级时间戳且内容与本机一致', relEvidence('AC-27-1-export.json'), async () => {
+    await closeAnyOverlay();
+    await openSettings();
+    const info = await downloadBackup('AC-27-1-export.json');
+    const toastText = await page.locator('.toast').innerText().catch(() => '');
+    ensure(
+      /^whenlast-backup-\d{8}-\d{6}\.json$/.test(info.suggested),
+      `备份文件名不是 whenlast-backup-YYYYMMDD-HHmmss.json：${info.suggested}`,
+    );
+    ensure(info.suggested !== '', '备份文件名为空');
+    const parsed = JSON.parse(await fsp.readFile(info.target, 'utf8'));
+    const counts = await readCounts();
+    ensure(parsed.items.length === counts.items, `备份事项数 ${parsed.items.length} 与本机 ${counts.items} 不一致`);
+    ensure(parsed.events.length === counts.events, `备份记录数 ${parsed.events.length} 与本机 ${counts.events} 不一致`);
+    ensure(!Number.isNaN(Date.parse(parsed.exportedAt)), `exportedAt 无效：${parsed.exportedAt}`);
+    ensure(
+      !/"(apiKey|token|password|secret)"/i.test(JSON.stringify(parsed)),
+      '备份中出现疑似凭据字段',
+    );
+    ensure(toastText.includes('已发起下载'), `导出提示不得声称已保存成功，实际：${toastText}`);
+    exportInfo = info;
+    return `文件名=${info.suggested}；items=${parsed.items.length}, events=${parsed.events.length}，与本机一致；toast=「${toastText}」`;
+  });
+
+  await check('AC-27', '下载提示明确需到下载项确认并另存', relEvidence('AC-27-2-下载提示.png'), async () => {
+    const hint = await page.locator('.settings .export-download-hint').innerText();
+    ensure(hint.includes('下载项') || hint.includes('下载'), `下载提示未说明需到下载项确认：${hint}`);
+    ensure(hint.includes('另存'), `下载提示未建议另存一份：${hint}`);
+    await capture('AC-27-2-下载提示.png');
+    await closeSheet();
+    return `提示=「${hint}」`;
+  });
+
+  await check('AC-28', '恢复预检同时显示备份与本机数量', relEvidence('AC-28-1-导入预检双计数.png'), async () => {
+    ensure(exportInfo, '缺少待恢复的备份文件');
+    await closeAnyOverlay();
+    await openSettings();
+    await page.locator('.settings .file-input').setInputFiles(exportInfo.target);
+    await page.waitForSelector('.import-preview', { timeout: 10000 });
+    const text = await page.locator('.import-preview').innerText();
+    const counts = await readCounts();
+    for (const expected of ['事项：', '记录：', '本机现有事项：', '本机现有记录：', '不会合并', '导出时间：']) {
+      ensure(text.includes(expected), `预检缺少「${expected}」：${text.replace(/\n/g, ' / ')}`);
+    }
+    ensure(text.includes(`本机现有事项：${counts.items}`), `预检本机事项数不等于 ${counts.items}：${text.replace(/\n/g, ' / ')}`);
+    ensure(text.includes(`本机现有记录：${counts.events}`), `预检本机记录数不等于 ${counts.events}：${text.replace(/\n/g, ' / ')}`);
+    ensure(
+      (await page.locator('.import-preview .import-export-first').count()) === 1,
+      '本机已有数据时预检未提供「先备份本机数据」入口',
+    );
+    await capture('AC-28-1-导入预检双计数.png');
+    return `预检=「${text.replace(/\n/g, ' / ')}」，本机计数=${JSON.stringify(counts)}，含先备份入口`;
+  });
+
+  await check('AC-28', '取消预检不改动本机数据', relEvidence('AC-28-2-取消预检.png'), async () => {
+    const before = await readCounts();
+    await page.locator('.import-preview .import-actions button').first().click();
+    await page.waitForFunction(() => !document.querySelector('.import-preview'), null, {
+      timeout: 5000,
+    });
+    const after = await readCounts();
+    ensure(
+      after.items === before.items && after.events === before.events,
+      `取消预检后数据变化：${JSON.stringify(before)} -> ${JSON.stringify(after)}`,
+    );
+    await capture('AC-28-2-取消预检.png');
+    return `取消预检后 IndexedDB 保持 ${JSON.stringify(after)}`;
+  });
+
+  await check('AC-28', '超大文件、未来日期备份被拒绝且不改数据', relEvidence('AC-28-3-坏备份拒绝.png'), async () => {
+    const before = await readCounts();
+
+    const oversizePath = path.join(FIXTURES, 'oversize-backup.json');
+    await fsp.writeFile(oversizePath, `{"app":"whenlast"}${' '.repeat(5 * 1024 * 1024)}`, 'utf8');
+    await page.locator('.settings .file-input').setInputFiles(oversizePath);
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.settings .form-error')].some((node) => node.textContent?.includes('超过 5 MB')),
+      null,
+      { timeout: 10000 },
+    );
+
+    const futurePath = path.join(FIXTURES, 'future-backup.json');
+    await fsp.writeFile(
+      futurePath,
+      `${JSON.stringify({
+        app: 'whenlast',
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        items: [{ id: 'item-future', name: '未来事项', nameKey: '未来事项', createdAt: '2026-09-01T08:00:00.000Z', updatedAt: '2026-09-01T08:00:00.000Z' }],
+        events: [{ id: 'event-future', itemId: 'item-future', occurredOn: future1, createdAt: '2026-09-01T08:00:00.000Z', updatedAt: '2026-09-01T08:00:00.000Z' }],
+      }, null, 2)}\n`,
+      'utf8',
+    );
+    await page.locator('.settings .file-input').setInputFiles(futurePath);
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.settings .form-error')].some((node) => node.textContent?.includes('备份文件无效')),
+      null,
+      { timeout: 10000 },
+    );
+
+    const errors = await page.locator('.settings .form-error').allTextContents();
+    ensure((await page.locator('.import-preview').count()) === 0, '被拒绝的备份仍出现了恢复预检');
+    const after = await readCounts();
+    ensure(
+      after.items === before.items && after.events === before.events,
+      `坏备份改变了数据：${JSON.stringify(before)} -> ${JSON.stringify(after)}`,
+    );
+    await capture('AC-28-3-坏备份拒绝.png');
+    await closeSheet();
+    return `超大与未来日期备份被拒（${errors.join('；')}），计数保持 ${JSON.stringify(after)}`;
+  });
+
+  await check('AC-29', '备份再次恢复后事项/记录/间隔一致', relEvidence('AC-29-1-恢复后核对.png'), async () => {
+    ensure(exportInfo, '缺少待恢复的备份文件');
+    await closeAnyOverlay();
+    await goHome();
+    const before = await readCounts();
+    const beforeGaps = await page.evaluate(() =>
+      [...document.querySelectorAll('.item')].map(
+        (node) => `${node.querySelector('.item-name')?.textContent ?? ''}=${node.querySelector('.item-gap')?.textContent ?? ''}`,
+      ),
+    );
+    ensure(beforeGaps.length === before.items, `首页事项卡数量 ${beforeGaps.length} 与 IndexedDB ${before.items} 不一致`);
+    await goHistory();
+    const beforeHistory = (await historyRows()).length;
+    ensure(beforeHistory === before.events, `历史条数 ${beforeHistory} 与 IndexedDB ${before.events} 不一致`);
+
+    await closeAnyOverlay();
+    await openSettings();
+    await page.locator('.settings .file-input').setInputFiles(exportInfo.target);
+    await page.waitForSelector('.import-preview', { timeout: 10000 });
+    await page.locator('.import-preview .btn-danger').click();
+    await page.waitForSelector('.confirm-overlay', { timeout: 5000 });
+    const message = await page.locator('.confirm-overlay .dialog-message').innerText();
+    ensure(
+      message.includes('替换') && message.includes('无法撤销'),
+      `替换确认未说明会替换且不可撤销：${message}`,
+    );
+    await page.locator('.confirm-overlay .dialog-actions button').nth(1).click();
+    await page.waitForFunction(() => !document.querySelector('.import-preview'), null, { timeout: 12000 });
+    await sleep(400);
+    await closeSheet();
+    await goHome();
+    const after = await readCounts();
+    ensure(
+      after.items === before.items && after.events === before.events,
+      `恢复同一备份后计数变化：${JSON.stringify(before)} -> ${JSON.stringify(after)}`,
+    );
+    const afterGaps = await page.evaluate(() =>
+      [...document.querySelectorAll('.item')].map(
+        (node) => `${node.querySelector('.item-name')?.textContent ?? ''}=${node.querySelector('.item-gap')?.textContent ?? ''}`,
+      ),
+    );
+    ensure(
+      JSON.stringify(afterGaps) === JSON.stringify(beforeGaps),
+      `恢复后间隔显示变化：${JSON.stringify(beforeGaps)} -> ${JSON.stringify(afterGaps)}`,
+    );
+    await capture('AC-29-1-恢复后核对.png');
+    await goHistory();
+    const afterHistory = (await historyRows()).length;
+    ensure(afterHistory === beforeHistory, `恢复后历史条数变化：${beforeHistory} -> ${afterHistory}`);
+    return `确认文案=「${message}」；恢复前后 items=${after.items}, events=${after.events}, 历史=${afterHistory}，间隔显示一致`;
+  });
+
+  await check('AC-32', '备份入口与换机指引可见且不承诺永久保存', relEvidence('AC-32-1-换机指引.png'), async () => {
+    await closeAnyOverlay();
+    await openSettings();
+    const settingsText = await page.locator('.settings').innerText();
+    ensure(settingsText.includes('备份到手机'), '备份入口文案未使用「备份到手机」');
+    ensure(settingsText.includes('从文件恢复'), '恢复入口文案未使用「从文件恢复」');
+    ensure(settingsText.includes('换手机'), '设置内缺少换手机说明');
+    const steps = await page.locator('.settings .migration-steps li').count();
+    ensure(steps === 3, `换手机说明步骤数应为 3，实际 ${steps}`);
+    ensure(settingsText.includes('另存一份'), '缺少数据丢失/另存一份提醒');
+    ensure(!settingsText.includes('永久保存') && !settingsText.includes('永久安全'), '出现了永久保存类不实承诺');
+    ensure(!settingsText.includes('云同步'), 'V1.3 不应出现云同步入口');
+    await capture('AC-32-1-换机指引.png');
+    await closeSheet();
+    return `入口=备份到手机/从文件恢复；换手机步骤=${steps}；含另存提醒、无永久保存承诺、无云同步入口`;
+  });
+
   await check('AC-17', '删除事项取消后无变化', relEvidence('AC-17-1-删除事项取消.png'), async () => {
     const before = await readCounts();
     await openDetail('擦窗');
@@ -1198,7 +1386,7 @@ async function main() {
 
   await check('AC-13', '设置内隐私说明可见', relEvidence('AC-13-1-设置隐私.png'), async () => {
     const privacyTitle = await page.locator('.settings .section-title').filter({ hasText: '隐私说明' }).count();
-    const privacyText = await page.locator('.settings .settings-text').first().innerText();
+    const privacyText = await page.locator('.settings .privacy-text').innerText();
     ensure(privacyTitle >= 1, '设置内未找到隐私说明标题');
     ensure(privacyText.includes('数据只保存在本机浏览器'), `隐私说明内容异常：${privacyText}`);
     await capture('AC-13-1-设置隐私.png');

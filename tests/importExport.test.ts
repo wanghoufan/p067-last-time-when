@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { AppError, type Snapshot } from '../src/domain/types';
-import { buildBackup, parseBackup } from '../src/storage/importExport';
+import { backupFileName, buildBackup, parseBackup } from '../src/storage/importExport';
 import { getSnapshot, replaceAll } from '../src/storage/repository';
 
 const TODAY = '2026-11-02';
@@ -111,6 +111,17 @@ describe('buildBackup', () => {
   });
 });
 
+describe('backupFileName', () => {
+  it('使用本地时间并补零到秒级', () => {
+    expect(backupFileName(new Date(2026, 0, 2, 3, 4, 5))).toBe(
+      'whenlast-backup-20260102-030405.json',
+    );
+    expect(backupFileName(new Date(2026, 10, 3, 0, 0, 0))).toBe(
+      'whenlast-backup-20261103-000000.json',
+    );
+  });
+});
+
 describe('导出 → 解析 → 恢复', () => {
   it('数据等价', async () => {
     const snapshot = makeSnapshot();
@@ -138,6 +149,38 @@ describe('导出 → 解析 → 恢复', () => {
       theme: 'SYSTEM',
       language: 'FOLLOW_SYSTEM',
     });
+  });
+
+  it('重复导入同一备份两次结果一致', async () => {
+    const snapshot = makeSnapshot();
+    const first = parseBackup(buildBackup(snapshot), TODAY);
+    const dbName = freshDb();
+
+    await replaceAll(first.backup, dbName);
+    const afterFirst = await getSnapshot(dbName);
+
+    const second = parseBackup(buildBackup(afterFirst), TODAY);
+    await replaceAll(second.backup, dbName);
+    const afterSecond = await getSnapshot(dbName);
+
+    expect(second.stats).toEqual(first.stats);
+    expect(second.stats).toEqual({ items: 2, events: 3 });
+    expect(sortById(afterSecond.items)).toEqual(sortById(afterFirst.items));
+    expect(sortById(afterSecond.events)).toEqual(sortById(afterFirst.events));
+    expect(afterSecond.settings).toEqual(afterFirst.settings);
+  });
+
+  it('空备份可解析且统计为 0', () => {
+    const snapshot: Snapshot = {
+      items: [],
+      events: [],
+      settings: { id: 'app', theme: 'LIGHT', language: 'zh-CN' },
+    };
+    const parsed = parseBackup(buildBackup(snapshot), TODAY);
+
+    expect(parsed.backup.items).toEqual([]);
+    expect(parsed.backup.events).toEqual([]);
+    expect(parsed.stats).toEqual({ items: 0, events: 0 });
   });
 });
 

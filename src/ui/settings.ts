@@ -8,8 +8,10 @@ import {
 import { getResolvedLanguage, messageForError, setLanguage, t } from '../i18n';
 import {
   MAX_BACKUP_BYTES,
+  backupFileName,
   buildBackup,
   parseBackup,
+  type BackupStats,
   type ParsedBackup,
 } from '../storage/importExport';
 import { getSnapshot, replaceAll, saveSettings } from '../storage/repository';
@@ -30,28 +32,41 @@ export interface SettingsSheetOptions {
 
 let formSeq = 0;
 
-function timestamp(date: Date): string {
-  const pad = (value: number): string => String(value).padStart(2, '0');
-  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(
-    date.getHours(),
-  )}${pad(date.getMinutes())}`;
-}
-
 function downloadBackup(text: string): void {
   const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `whenlast-backup-${timestamp(new Date())}.json`;
+  link.download = backupFileName(new Date());
   document.body.append(link);
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function canShareBackupFile(fileName: string): boolean {
+  if (typeof File !== 'function') return false;
+  if (typeof navigator === 'undefined' || typeof navigator.canShare !== 'function') return false;
+  try {
+    const probe = new File([''], fileName, { type: 'application/json' });
+    return navigator.canShare({ files: [probe] });
+  } catch {
+    return false;
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 export function openSettingsSheet(options: SettingsSheetOptions): void {
   let settings: Settings = { ...options.snapshot.settings };
   let pending: ParsedBackup | null = null;
+  let currentCounts: BackupStats | null = null;
   let importError = '';
   let exportBusy = false;
   let importBusy = false;
@@ -130,30 +145,46 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
     ]);
   };
 
-  const exportButton = el('button', {
-    className: 'btn btn-secondary',
-    attrs: { type: 'button' },
-    text: t('exportJson'),
-  });
+  const exportCurrent = async (button: HTMLButtonElement): Promise<void> => {
+    if (exportBusy) return;
+    exportBusy = true;
+    button.disabled = true;
 
-  exportButton.addEventListener('click', () => {
-    void (async () => {
-      if (exportBusy) return;
-      exportBusy = true;
-      exportButton.disabled = true;
+    try {
+      const snapshot = await getSnapshot();
+      const text = buildBackup(snapshot);
+      downloadBackup(text);
+      showToast(t('toastExported'));
+    } catch (error) {
+      showToast(messageForError(error));
+    } finally {
+      exportBusy = false;
+      button.disabled = false;
+    }
+  };
 
-      try {
-        const snapshot = await getSnapshot();
-        downloadBackup(buildBackup(snapshot));
-        showToast(t('toastExported'));
-      } catch (error) {
-        showToast(messageForError(error));
-      } finally {
-        exportBusy = false;
-        exportButton.disabled = false;
-      }
-    })();
-  });
+  const shareBackup = async (button: HTMLButtonElement): Promise<void> => {
+    if (exportBusy) return;
+    if (typeof navigator.share !== 'function') {
+      showToast(t('exportShareFailed'));
+      return;
+    }
+
+    exportBusy = true;
+    button.disabled = true;
+
+    try {
+      const snapshot = await getSnapshot();
+      const text = buildBackup(snapshot);
+      const file = new File([text], backupFileName(new Date()), { type: 'application/json' });
+      await navigator.share({ files: [file], title: t('appName') });
+    } catch (error) {
+      if (!isAbortError(error)) showToast(t('exportShareFailed'));
+    } finally {
+      exportBusy = false;
+      button.disabled = false;
+    }
+  };
 
   const importInputId = `settings-import-${++formSeq}`;
   const fileInput = el('input', {
@@ -173,6 +204,7 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
     input.value = '';
     importError = '';
     pending = null;
+    currentCounts = null;
 
     if (file.size > MAX_BACKUP_BYTES) {
       importError = t('importTooLarge');
@@ -196,6 +228,15 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
       importError = t('importInvalid');
     }
 
+    if (pending) {
+      try {
+        const snapshot = await getSnapshot();
+        currentCounts = { items: snapshot.items.length, events: snapshot.events.length };
+      } catch {
+        currentCounts = { items: 0, events: 0 };
+      }
+    }
+
     rebuild();
   };
 
@@ -206,10 +247,17 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
   const applyImport = async (button: HTMLButtonElement): Promise<void> => {
     if (!pending || importBusy) return;
     const backup = pending.backup;
+    const incoming = pending.stats;
+    const current = currentCounts ?? { items: 0, events: 0 };
 
     const confirmed = await confirmAction({
       title: t('importReplaceTitle'),
-      message: t('importReplaceMessage'),
+      message: t('importReplaceMessage', {
+        items: incoming.items,
+        events: incoming.events,
+        currentItems: current.items,
+        currentEvents: current.events,
+      }),
       confirmText: t('importReplace'),
       cancelText: t('cancel'),
       danger: true,
@@ -237,6 +285,7 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
     applyTheme(settings.theme);
     setLanguage(settings.language);
     pending = null;
+    currentCounts = null;
     importError = '';
     importBusy = false;
 
@@ -269,6 +318,7 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
       }
 
       pending = null;
+      currentCounts = null;
       importError = '';
 
       try {
@@ -315,8 +365,33 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
       ),
     ]);
 
+    const exportButton = el('button', {
+      className: 'btn btn-primary',
+      attrs: { type: 'button' },
+      text: t('exportJson'),
+    });
+    exportButton.addEventListener('click', () => {
+      void exportCurrent(exportButton);
+    });
+
+    const shareButton = canShareBackupFile(backupFileName(new Date()))
+      ? (() => {
+          const button = el('button', {
+            className: 'btn btn-secondary',
+            attrs: { type: 'button' },
+            text: t('exportShare'),
+          });
+          button.addEventListener('click', () => {
+            void shareBackup(button);
+          });
+          return button;
+        })()
+      : null;
+
     const previewNode = pending
       ? (() => {
+          const stats = pending.stats;
+          const current = currentCounts ?? { items: 0, events: 0 };
           const exported = new Date(pending.backup.exportedAt);
           const timeText = Number.isNaN(exported.getTime())
             ? pending.backup.exportedAt
@@ -329,9 +404,25 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
           });
           cancelButton.addEventListener('click', () => {
             pending = null;
+            currentCounts = null;
             importError = '';
             rebuild();
           });
+
+          const exportFirstButton =
+            current.items + current.events > 0
+              ? (() => {
+                  const button = el('button', {
+                    className: 'btn btn-secondary import-export-first',
+                    attrs: { type: 'button' },
+                    text: t('importExportFirst'),
+                  });
+                  button.addEventListener('click', () => {
+                    void exportCurrent(button);
+                  });
+                  return button;
+                })()
+              : null;
 
           const replaceButton = el('button', {
             className: 'btn btn-danger',
@@ -346,18 +437,36 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
             el('h4', { className: 'import-preview-title', text: t('importPreviewTitle') }),
             el('p', {
               className: 'import-meta',
-              text: t('importPreviewItems', { n: pending.stats.items }),
+              text: t('importPreviewItems', { n: stats.items }),
             }),
             el('p', {
               className: 'import-meta',
-              text: t('importPreviewEvents', { n: pending.stats.events }),
+              text: t('importPreviewEvents', { n: stats.events }),
             }),
             el('p', {
               className: 'import-meta',
               text: t('importPreviewExportedAt', { time: timeText }),
             }),
+            el('p', {
+              className: 'import-meta',
+              text: t('importPreviewCurrentItems', { n: current.items }),
+            }),
+            el('p', {
+              className: 'import-meta',
+              text: t('importPreviewCurrentEvents', { n: current.events }),
+            }),
+            stats.items + stats.events === 0
+              ? el('p', { className: 'import-note', text: t('importEmptyWarning') })
+              : null,
+            current.items + current.events > 0
+              ? el('p', { className: 'import-note', text: t('importRecommendedBackup') })
+              : null,
             el('p', { className: 'import-note', text: t('importReplaceHint') }),
-            el('div', { className: 'import-actions' }, [cancelButton, replaceButton]),
+            el('div', { className: 'import-actions' }, [
+              cancelButton,
+              exportFirstButton,
+              replaceButton,
+            ]),
           ]);
         })()
       : null;
@@ -374,7 +483,8 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
       el('section', { className: 'settings-section' }, [languageGroup]),
       el('section', { className: 'settings-section' }, [
         el('h3', { className: 'section-title', text: t('settingsDataTitle') }),
-        el('div', { className: 'settings-actions' }, [exportButton]),
+        el('div', { className: 'settings-actions' }, [exportButton, shareButton]),
+        el('p', { className: 'settings-text export-download-hint', text: t('exportDownloadHint') }),
         el('label', { className: 'field file-field', attrs: { for: importInputId } }, [
           el('span', { className: 'field-label', text: t('importJson') }),
           fileInput,
@@ -389,8 +499,17 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
         previewNode,
       ]),
       el('section', { className: 'settings-section' }, [
+        el('h3', { className: 'section-title', text: t('migrationTitle') }),
+        el('ol', { className: 'settings-text migration-steps' }, [
+          el('li', { text: t('migrationStep1') }),
+          el('li', { text: t('migrationStep2') }),
+          el('li', { text: t('migrationStep3') }),
+        ]),
+        el('p', { className: 'settings-text', text: t('migrationLossNote') }),
+      ]),
+      el('section', { className: 'settings-section privacy-section' }, [
         el('h3', { className: 'section-title', text: t('privacyTitle') }),
-        el('p', { className: 'settings-text', text: t('privacyText') }),
+        el('p', { className: 'settings-text privacy-text', text: t('privacyText') }),
       ]),
       el('section', { className: 'settings-section' }, [
         el('div', { className: 'settings-actions' }, [clearButton]),
