@@ -1,6 +1,6 @@
 {
   "name": "上次啥时候",
-  "short_name": "上次啥时候",
+  "short_name": "上次啥时候.pwa",
   "description": "记录并查看每件事上次发生的时间。Track when you last did something.",
   "lang": "zh-CN",
   "start_url": "./",

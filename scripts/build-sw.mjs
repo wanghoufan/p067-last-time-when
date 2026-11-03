@@ -62,6 +62,9 @@ async function validateManifest(manifestFile) {
     return [`manifest.webmanifest 不是合法 JSON：${error.message}`];
   }
   const problems = [];
+  if (typeof manifest.short_name !== 'string' || !/\.pwa$/i.test(manifest.short_name)) {
+    problems.push('manifest.webmanifest 的 short_name 必须以 .pwa 结尾（PWA 桌面快捷方式命名规范）');
+  }
   if (!Array.isArray(manifest.icons) || manifest.icons.length === 0) {
     problems.push('manifest.webmanifest 缺少 icons 数组');
     return problems;

@@ -21,7 +21,7 @@ import { openSheet } from './sheet';
 import { applyTheme } from './theme';
 import { showToast } from './toast';
 
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.1.1+20261103';
 
 export interface SettingsSheetOptions {
   snapshot: Snapshot;
