@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f6f7fa" />
+    <title>上次啥时候 · WhenLast</title>
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f7fa;
+        --surface: #ffffff;
+        --text: #222332;
+        --muted: #666a80;
+        --accent: #5942bb;
+        --border: #e0e0eb;
+        font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 19px;
+        line-height: 1.5;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: var(--bg);
+        text-align: center;
+      }
+      #splash-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        max-width: 360px;
+      }
+      #splash svg {
+        width: 88px;
+        height: 88px;
+      }
+      #splash h1 {
+        margin: 4px 0 0;
+        font-size: 29px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      #splash .en {
+        margin: 0;
+        color: var(--muted);
+        font-size: 17px;
+        letter-spacing: 0.08em;
+      }
+      #enter {
+        margin-top: 12px;
+        min-width: 144px;
+        min-height: 48px;
+        padding: 10px 24px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        font: inherit;
+        font-size: 17px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #enter:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 3px;
+      }
+      #app {
+        max-width: 440px;
+        min-height: 100dvh;
+        margin: 0 auto;
+        padding: 24px 16px;
+        color: var(--muted);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #11131b;
+          --surface: #202330;
+          --text: #f1f2fc;
+          --muted: #b9bad0;
+          --border: #383d4e;
+        }
+        #enter {
+          color: #11131b;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="splash">
+      <div id="splash-inner">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="WhenLast">
+          <rect width="128" height="128" rx="28" fill="#5942bb" />
+          <rect x="25" y="26" width="64" height="70" rx="10" fill="none" stroke="#fff" stroke-width="7" />
+          <path d="M25 46H89 M43 17V34 M71 17V34" stroke="#fff" stroke-width="7" stroke-linecap="round" />
+          <circle cx="84" cy="82" r="24" fill="#fff" />
+          <path d="M84 68V83L95 90" fill="none" stroke="#5942bb" stroke-linecap="round" stroke-linejoin="round" stroke-width="6" />
+        </svg>
+        <h1>上次啥时候</h1>
+        <p class="en">WhenLast</p>
+        <button id="enter" type="button">进入</button>
+      </div>
+    </div>
+    <main id="app"></main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
