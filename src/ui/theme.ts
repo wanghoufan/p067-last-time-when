@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
 import type { ThemePreference } from '../domain/types';
 import { saveSettings } from '../storage/repository';
 
@@ -34,6 +36,12 @@ function syncDom(): void {
     document.head.append(meta);
   }
   meta.content = THEME_COLORS[theme];
+
+  if (Capacitor.isNativePlatform()) {
+    void StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light }).catch(
+      () => undefined,
+    );
+  }
 }
 
 export function applyTheme(next: ThemePreference): ResolvedTheme {

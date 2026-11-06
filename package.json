@@ -1,6 +1,6 @@
 {
   "name": "whenlast",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,11 +14,21 @@
     "icons": "node scripts/gen-icons.mjs"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "fake-indexeddb": "^6.2.7",
     "playwright-core": "^1.64.1",
     "sharp": "^0.34.5",
     "typescript": "^5.9.3",
     "vite": "^7.3.7",
     "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4"
   }
 }

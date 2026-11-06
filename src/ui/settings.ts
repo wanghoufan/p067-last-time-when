@@ -14,14 +14,15 @@ import {
   type BackupStats,
   type ParsedBackup,
 } from '../storage/importExport';
+import { downloadBackupInBrowser, isNativeApp, shareBackupOnDevice } from '../platform/backup-file';
 import { getSnapshot, replaceAll, saveSettings } from '../storage/repository';
 import { confirmAction } from './confirm';
 import { el } from './dom';
-import { openSheet } from './sheet';
+import { openSheet, type SheetHandle } from './sheet';
 import { applyTheme } from './theme';
 import { showToast } from './toast';
 
-export const APP_VERSION = '0.1.1+20261103';
+export const APP_VERSION = '0.1.2+20261103';
 
 export interface SettingsSheetOptions {
   snapshot: Snapshot;
@@ -31,18 +32,6 @@ export interface SettingsSheetOptions {
 }
 
 let formSeq = 0;
-
-function downloadBackup(text: string): void {
-  const blob = new Blob([text], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = backupFileName(new Date());
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 function canShareBackupFile(fileName: string): boolean {
   if (typeof File !== 'function') return false;
@@ -72,6 +61,7 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
   let importBusy = false;
 
   const content = el('div', { className: 'settings' });
+  let sheet: SheetHandle | null = null;
 
   const syncChoices = (name: string, value: string): void => {
     content.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((input) => {
@@ -153,8 +143,16 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
     try {
       const snapshot = await getSnapshot();
       const text = buildBackup(snapshot);
-      downloadBackup(text);
-      showToast(t('toastExported'));
+      const fileName = backupFileName(new Date());
+
+      if (isNativeApp()) {
+        const shared = await shareBackupOnDevice(text, fileName, t('shareDialogTitle'));
+        if (!shared) return;
+        showToast(t('toastExportedNative'));
+      } else {
+        downloadBackupInBrowser(text, fileName);
+        showToast(t('toastExported'));
+      }
     } catch (error) {
       showToast(messageForError(error));
     } finally {
@@ -192,7 +190,7 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
     attrs: {
       id: importInputId,
       type: 'file',
-      accept: 'application/json,.json',
+      accept: 'application/json,.json,text/plain',
       'aria-label': t('importJson'),
     },
   });
@@ -333,6 +331,8 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
   };
 
   const rebuild = (): void => {
+    sheet?.setChrome(t('settingsTitle'), t('close'));
+
     const themeGroup = el('fieldset', { className: 'choice-group' }, [
       el('legend', { className: 'section-title', text: t('theme') }),
       makeChoice('theme', 'LIGHT', t('themeLight'), settings.theme === 'LIGHT', () => {
@@ -484,7 +484,10 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
       el('section', { className: 'settings-section' }, [
         el('h3', { className: 'section-title', text: t('settingsDataTitle') }),
         el('div', { className: 'settings-actions' }, [exportButton, shareButton]),
-        el('p', { className: 'settings-text export-download-hint', text: t('exportDownloadHint') }),
+        el('p', {
+          className: 'settings-text export-download-hint',
+          text: isNativeApp() ? t('exportNativeHint') : t('exportDownloadHint'),
+        }),
         el('label', { className: 'field file-field', attrs: { for: importInputId } }, [
           el('span', { className: 'field-label', text: t('importJson') }),
           fileInput,
@@ -521,7 +524,7 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
     );
   };
 
-  openSheet({
+  sheet = openSheet({
     title: t('settingsTitle'),
     content,
     closeLabel: t('close'),

@@ -93,12 +93,12 @@ function renderItem(item: Item, state: HomeState, actions: HomeActions): HTMLEle
         ? t('todayShort')
         : t('daysAgo', { n: summary.elapsedDays });
   const lastText = summary.lastDate
-    ? t('lastOn', { date: summary.lastDate })
+    ? t('lastOnShort', { date: summary.lastDate })
     : t('noEntries');
   const gapText =
     summary.lastGapDays === null
-      ? t('noGap')
-      : t('lastGap', { n: summary.lastGapDays });
+      ? t('gapNoneShort')
+      : t('gapShort', { n: summary.lastGapDays });
 
   const logButton = el('button', {
     className: 'btn btn-primary item-log',
@@ -138,12 +138,13 @@ function renderItem(item: Item, state: HomeState, actions: HomeActions): HTMLEle
       el('div', { className: 'item-row' }, [
         el('div', { className: 'item-main' }, [
           el('strong', { className: 'item-name', text: item.name }),
-          el('p', { className: 'item-sub', text: lastText }),
+          el('p', { className: 'item-sub', text: `${lastText} · ${gapText}` }),
         ]),
-        el('span', { className: 'item-elapsed', text: elapsedText }),
+        el('div', { className: 'item-side' }, [
+          el('span', { className: 'item-elapsed', text: elapsedText }),
+          el('div', { className: 'item-actions' }, [logButton, detailsButton]),
+        ]),
       ]),
-      el('p', { className: 'item-gap', text: gapText }),
-      el('div', { className: 'item-actions' }, [logButton, detailsButton]),
     ],
   );
 }

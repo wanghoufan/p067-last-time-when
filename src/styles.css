@@ -5,14 +5,17 @@
   --surface-2: #eef0f6;
   --text: #222332;
   --muted: #666a80;
-  --accent: #5942bb;
+  --accent: #2F4A7E;
   --accent-ink: #ffffff;
   --border: #e0e0eb;
   --danger: #ae3645;
   --danger-ink: #ffffff;
-  --focus: #5942bb;
+  --focus: #2F4A7E;
   --shadow: 0 12px 32px rgba(24, 24, 40, 0.16);
   --radius: 8px;
+  /* Capacitor 在 Android 15+ 注入 --safe-area-inset-*，浏览器则走 env()。 */
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
 }
 
@@ -23,12 +26,12 @@
   --surface-2: #2a2d3d;
   --text: #f1f2fc;
   --muted: #b9bad0;
-  --accent: #8f7dff;
+  --accent: #9AB4E8;
   --accent-ink: #11131b;
   --border: #383d4e;
   --danger: #ff8a9a;
   --danger-ink: #11131b;
-  --focus: #a99bff;
+  --focus: #B3C9F2;
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
@@ -40,12 +43,12 @@
     --surface-2: #2a2d3d;
     --text: #f1f2fc;
     --muted: #b9bad0;
-    --accent: #8f7dff;
+    --accent: #9AB4E8;
     --accent-ink: #11131b;
     --border: #383d4e;
     --danger: #ff8a9a;
     --danger-ink: #11131b;
-    --focus: #a99bff;
+    --focus: #B3C9F2;
     --shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   }
 }
@@ -65,7 +68,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: inherit;
-  font-size: 19px;
+  font-size: 17px;
   line-height: 1.5;
   overflow-x: hidden;
 }
@@ -74,10 +77,10 @@ body #app {
   max-width: 440px;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: calc(12px + env(safe-area-inset-top)) 16px
-    calc(96px + env(safe-area-inset-bottom));
+  padding: calc(8px + var(--safe-top)) 14px
+    calc(88px + var(--safe-bottom));
   color: var(--text);
-  font-size: 19px;
+  font-size: 17px;
 }
 
 h1,
@@ -106,9 +109,9 @@ button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
-  margin-bottom: 12px;
+  gap: 10px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -117,7 +120,7 @@ button {
 }
 
 .app-title {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.02em;
@@ -125,9 +128,9 @@ button {
 }
 
 .tagline {
-  margin-top: 4px;
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   overflow-wrap: anywhere;
 }
 
@@ -202,14 +205,14 @@ button {
 
 .search-input {
   width: 100%;
-  min-height: 44px;
-  margin-bottom: 10px;
-  padding: 10px 12px;
+  min-height: 40px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
-  font-size: 19px;
+  font-size: 16px;
   line-height: 1.3;
 }
 
@@ -222,11 +225,11 @@ button {
 .item-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .item {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: var(--radius);
@@ -237,7 +240,7 @@ button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .item-main {
@@ -246,16 +249,16 @@ button {
 
 .item-name {
   display: block;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
 .item-sub {
-  margin-top: 2px;
+  margin-top: 1px;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
@@ -263,36 +266,36 @@ button {
 .item-elapsed {
   flex: 0 0 auto;
   color: var(--accent);
-  font-size: 23px;
+  font-size: 20px;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   line-height: 1.25;
   white-space: nowrap;
 }
 
-.item-gap {
-  margin: 6px 0 8px;
-  color: var(--muted);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+.item-side {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
 .item-actions {
   display: flex;
-  gap: 8px;
+  gap: 4px;
 }
 
 .item-actions .btn {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 9px 10px;
-  font-size: 17px;
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 5px 8px;
+  font-size: 13px;
 }
 
 .add-button {
   width: 100%;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .empty-state {
@@ -341,7 +344,7 @@ button {
   gap: 8px;
   width: 100%;
   max-width: 440px;
-  padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+  padding: 4px 10px calc(4px + var(--safe-bottom));
   border-top: 1px solid var(--border);
   background: var(--surface);
   transform: translateX(-50%);
@@ -353,15 +356,15 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
-  min-height: 48px;
-  padding: 4px 8px;
+  min-height: 44px;
+  padding: 3px 8px;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1.2;
 }
 
@@ -376,8 +379,8 @@ button {
 }
 
 .tab-icon {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 
 .tab-label {
@@ -387,7 +390,7 @@ button {
 .toast-region {
   position: fixed;
   top: auto;
-  bottom: calc(76px + env(safe-area-inset-bottom));
+  bottom: calc(68px + var(--safe-bottom));
   left: 50%;
   z-index: 80;
   width: max-content;
@@ -425,9 +428,9 @@ button {
 .sheet {
   width: 100%;
   max-width: 440px;
-  max-height: 88dvh;
+  max-height: min(88dvh, calc(100% - 8px));
   overflow: auto;
-  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  padding: 16px 16px calc(16px + var(--safe-bottom));
   border-radius: var(--radius) var(--radius) 0 0;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -436,6 +439,31 @@ button {
 
 .sheet:focus {
   outline: none;
+}
+
+/* 触屏设备上含输入框的弹层贴视口顶部：Android PWA 独立窗口下软键盘弹起时
+   页面拿不到任何视口变化，贴底的弹层会被键盘整块盖住，只能靠位置规避。 */
+.sheet-overlay--keyboard {
+  align-items: flex-start;
+  padding-top: calc(12px + var(--safe-top));
+}
+
+.sheet-overlay--keyboard .sheet {
+  max-height: min(50dvh, calc(100% - 24px));
+  padding-bottom: 16px;
+  border-radius: var(--radius);
+  animation: sheet-in-top 160ms ease-out;
+}
+
+@keyframes sheet-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .sheet-head {

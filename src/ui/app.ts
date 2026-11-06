@@ -1,3 +1,6 @@
+import { App as NativeApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
+import type { PluginListenerHandle } from '@capacitor/core';
 import { todayLocal } from '../domain/date';
 import type { Event, Item, Snapshot } from '../domain/types';
 import { messageForError, t } from '../i18n';
@@ -9,6 +12,7 @@ import { openEventEditSheet } from './event-edit';
 import { renderHistory, type HistoryActions } from './history';
 import { renderHome, type HomeActions } from './home';
 import { openSettingsSheet } from './settings';
+import { closeActiveSheet } from './sheet';
 import { showToast } from './toast';
 
 export type Page = 'home' | 'history';
@@ -85,6 +89,7 @@ export function createApp(root: HTMLElement, initial: Snapshot): AppController {
   const scrollPositions: Record<Page, number> = { home: 0, history: 0 };
   let settingsTrigger: HTMLButtonElement | null = null;
   let timer: number | undefined;
+  let backListener: Promise<PluginListenerHandle> | null = null;
 
   const homeActions: HomeActions = {
     log: logOnce,
@@ -315,11 +320,23 @@ export function createApp(root: HTMLElement, initial: Snapshot): AppController {
       timer = window.setInterval(checkToday, 60_000);
       document.addEventListener('visibilitychange', onVisibility);
       window.addEventListener('focus', checkToday);
+
+      if (Capacitor.isNativePlatform()) {
+        backListener = NativeApp.addListener('backButton', () => {
+          if (closeActiveSheet()) return;
+          if (state.page !== 'home') {
+            navigate('home');
+            return;
+          }
+          void NativeApp.exitApp();
+        });
+      }
     },
     destroy(): void {
       if (timer !== undefined) window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('focus', checkToday);
+      void backListener?.then((handle) => handle.remove()).catch(() => undefined);
     },
   };
 }

@@ -7,7 +7,7 @@ import sharp from 'sharp';
 const ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const SOURCE = path.join(ROOT, 'docs/design/assets/whenlast-icon.svg');
 const OUT_DIR = path.join(ROOT, 'public/icons');
-const BRAND = '#5942bb';
+const BRAND = '#2F4A7E';
 const MASKABLE_RATIO = 0.8;
 
 function log(message) {
