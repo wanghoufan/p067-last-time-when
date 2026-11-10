@@ -23,3 +23,6 @@ Thumbs.db
 
 # 本地智能体工作目录
 .codeartsdoer/
+
+# codebuddy-auto.sh：本机账号切换脚本（读 ~/.wb-switch/），按其他仓惯例不入库
+/scripts/codebuddy-auto.sh
