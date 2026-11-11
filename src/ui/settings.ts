@@ -22,7 +22,7 @@ import { openSheet, type SheetHandle } from './sheet';
 import { applyTheme } from './theme';
 import { showToast } from './toast';
 
-export const APP_VERSION = '0.1.2+20261103';
+export const APP_VERSION = '0.1.3+20261111';
 
 export interface SettingsSheetOptions {
   snapshot: Snapshot;
