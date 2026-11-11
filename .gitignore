@@ -26,3 +26,8 @@ Thumbs.db
 
 # codebuddy-auto.sh：本机账号切换脚本（读 ~/.wb-switch/），按其他仓惯例不入库
 /scripts/codebuddy-auto.sh
+
+# 本地材料：含本机绝对路径与设备序列号，公开仓不收录（见 docs/handoff/HANDOFF.md 顶部说明）
+/VERSION.md
+/docs/risks.md
+/docs/handoff/HANDOFF.md
