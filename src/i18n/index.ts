@@ -46,6 +46,11 @@ export function setLanguage(next: LanguagePreference): Lang {
   resolved = next === 'FOLLOW_SYSTEM' ? detectLanguage() : next;
   if (typeof document !== 'undefined') {
     document.documentElement.lang = resolved;
+    const link = document.querySelector('link[rel="manifest"]');
+    if (link) {
+      const href = resolved === 'en' ? './manifest.en.webmanifest' : './manifest.webmanifest';
+      if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+    }
   }
   return resolved;
 }
