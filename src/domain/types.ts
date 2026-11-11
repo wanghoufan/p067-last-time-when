@@ -40,7 +40,11 @@ export type AppErrorCode =
   | 'INVALID_BACKUP'
   | 'TOO_LARGE'
   | 'NAME_TOO_LONG'
-  | 'INVALID_SETTINGS';
+  | 'INVALID_SETTINGS'
+  | 'CLOUD_NOT_CONFIGURED'
+  | 'CLOUD_AUTH'
+  | 'CLOUD_NETWORK'
+  | 'CLOUD_FAILED';
 
 export class AppError extends Error {
   readonly code: AppErrorCode;

@@ -15,6 +15,20 @@ import {
   type ParsedBackup,
 } from '../storage/importExport';
 import { downloadBackupInBrowser, isNativeApp, shareBackupOnDevice } from '../platform/backup-file';
+import {
+  getCloudSession,
+  isCloudConfigured,
+  signIn,
+  signOut,
+  type CloudSession,
+} from '../data/cloudbaseAuth';
+import {
+  deleteSnapshot,
+  downloadSnapshotText,
+  listSnapshots,
+  uploadSnapshot,
+  type CloudSnapshotMeta,
+} from '../data/cloudBackup';
 import { getSnapshot, replaceAll, saveSettings } from '../storage/repository';
 import { confirmAction } from './confirm';
 import { el } from './dom';
@@ -22,7 +36,7 @@ import { openSheet, type SheetHandle } from './sheet';
 import { applyTheme } from './theme';
 import { showToast } from './toast';
 
-export const APP_VERSION = '0.1.3+20261111';
+export const APP_VERSION = '0.1.4+20261111';
 
 export interface SettingsSheetOptions {
   snapshot: Snapshot;
@@ -59,6 +73,12 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
   let importError = '';
   let exportBusy = false;
   let importBusy = false;
+  let cloudSession: CloudSession | null = null;
+  let cloudList: CloudSnapshotMeta[] | null = null;
+  let cloudBusy = false;
+  let cloudError = '';
+  let cloudAccount = '';
+  let cloudPassword = '';
 
   const content = el('div', { className: 'settings' });
   let sheet: SheetHandle | null = null;
@@ -330,6 +350,313 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
     })();
   };
 
+  const formatCloudTime = (value: string): string => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString(getResolvedLanguage());
+  };
+
+  const refreshCloudList = async (): Promise<void> => {
+    if (!cloudSession) return;
+    try {
+      cloudList = await listSnapshots();
+      cloudError = '';
+    } catch (error) {
+      cloudList = null;
+      cloudError = messageForError(error);
+    }
+  };
+
+  const submitCloudLogin = async (): Promise<void> => {
+    if (cloudBusy) return;
+    cloudBusy = true;
+    cloudError = '';
+    rebuild();
+    try {
+      cloudSession = await signIn(cloudAccount, cloudPassword);
+      cloudPassword = '';
+      await refreshCloudList();
+    } catch (error) {
+      cloudError = messageForError(error);
+    } finally {
+      cloudBusy = false;
+      rebuild();
+    }
+  };
+
+  const leaveCloud = async (): Promise<void> => {
+    await signOut();
+    cloudSession = null;
+    cloudList = null;
+    cloudError = '';
+    rebuild();
+  };
+
+  const uploadToCloud = async (): Promise<void> => {
+    if (cloudBusy || !cloudSession) return;
+    cloudBusy = true;
+    cloudError = '';
+    rebuild();
+    try {
+      await uploadSnapshot(await getSnapshot());
+      await refreshCloudList();
+      showToast(t('toastCloudUploaded'));
+    } catch (error) {
+      cloudError = messageForError(error);
+    } finally {
+      cloudBusy = false;
+      rebuild();
+    }
+  };
+
+  const restoreFromCloud = async (meta: CloudSnapshotMeta): Promise<void> => {
+    if (cloudBusy) return;
+    cloudBusy = true;
+    cloudError = '';
+    rebuild();
+
+    let parsed: ParsedBackup;
+    let current: BackupStats;
+    try {
+      parsed = parseBackup(await downloadSnapshotText(meta.id), options.today);
+      const snapshot = await getSnapshot();
+      current = { items: snapshot.items.length, events: snapshot.events.length };
+    } catch (error) {
+      cloudError = messageForError(error);
+      cloudBusy = false;
+      rebuild();
+      return;
+    }
+
+    cloudBusy = false;
+    rebuild();
+
+    const confirmed = await confirmAction({
+      title: t('cloudRestoreTitle'),
+      message: t('cloudRestoreMessage', {
+        items: parsed.stats.items,
+        events: parsed.stats.events,
+        currentItems: current.items,
+        currentEvents: current.events,
+      }),
+      confirmText: t('cloudRestoreConfirm'),
+      cancelText: t('cancel'),
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    cloudBusy = true;
+    rebuild();
+    try {
+      await replaceAll({
+        items: parsed.backup.items,
+        events: parsed.backup.events,
+        settings: parsed.backup.settings,
+      });
+      settings = parsed.backup.settings ? { ...parsed.backup.settings } : { ...DEFAULT_SETTINGS };
+      applyTheme(settings.theme);
+      setLanguage(settings.language);
+      await options.onChanged();
+      showToast(t('toastCloudRestored'));
+    } catch (error) {
+      cloudError = t('importFailed');
+      showToast(messageForError(error));
+    } finally {
+      cloudBusy = false;
+      rebuild();
+    }
+  };
+
+  const removeFromCloud = async (meta: CloudSnapshotMeta): Promise<void> => {
+    if (cloudBusy) return;
+    const confirmed = await confirmAction({
+      title: t('cloudDeleteTitle'),
+      message: t('cloudDeleteMessage'),
+      confirmText: t('delete'),
+      cancelText: t('cancel'),
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    cloudBusy = true;
+    cloudError = '';
+    rebuild();
+    try {
+      await deleteSnapshot(meta.id);
+      await refreshCloudList();
+      showToast(t('toastCloudDeleted'));
+    } catch (error) {
+      cloudError = messageForError(error);
+    } finally {
+      cloudBusy = false;
+      rebuild();
+    }
+  };
+
+  const buildCloudSection = (): HTMLElement => {
+    const parts: (HTMLElement | null)[] = [
+      el('h3', { className: 'section-title', text: t('cloudTitle') }),
+    ];
+
+    if (!isCloudConfigured()) {
+      parts.push(el('p', { className: 'settings-text', text: t('cloudNotConfigured') }));
+      return el('section', { className: 'settings-section' }, parts);
+    }
+
+    parts.push(el('p', { className: 'settings-text', text: t('cloudDesc') }));
+
+    if (!cloudSession) {
+      const accountInput = el('input', {
+        className: 'text-input',
+        attrs: { type: 'text', autocomplete: 'username', placeholder: t('cloudAccount') },
+      });
+      accountInput.value = cloudAccount;
+      accountInput.addEventListener('input', () => {
+        cloudAccount = accountInput.value;
+      });
+
+      const passwordInput = el('input', {
+        className: 'text-input',
+        attrs: { type: 'password', autocomplete: 'current-password', placeholder: t('cloudPassword') },
+      });
+      passwordInput.value = cloudPassword;
+      passwordInput.addEventListener('input', () => {
+        cloudPassword = passwordInput.value;
+      });
+
+      const loginButton = el('button', {
+        className: 'btn btn-primary',
+        attrs: { type: 'button' },
+        text: cloudBusy ? t('cloudBusy') : t('cloudSignIn'),
+      });
+      loginButton.disabled = cloudBusy;
+      loginButton.addEventListener('click', () => {
+        void submitCloudLogin();
+      });
+
+      parts.push(
+        el('div', { className: 'form' }, [
+          el('label', { className: 'field' }, [
+            el('span', { className: 'field-label', text: t('cloudAccount') }),
+            accountInput,
+          ]),
+          el('label', { className: 'field' }, [
+            el('span', { className: 'field-label', text: t('cloudPassword') }),
+            passwordInput,
+          ]),
+          el('div', { className: 'form-actions' }, [loginButton]),
+        ]),
+      );
+      parts.push(
+        el('p', {
+          className: 'form-error',
+          attrs: { role: 'alert', 'aria-live': 'assertive' },
+          text: cloudError,
+        }),
+      );
+      return el('section', { className: 'settings-section' }, parts);
+    }
+
+    parts.push(
+      el('p', {
+        className: 'settings-text',
+        text: t('cloudSignedInAs', { name: cloudSession.username || cloudSession.userId }),
+      }),
+    );
+
+    const backupButton = el('button', {
+      className: 'btn btn-primary',
+      attrs: { type: 'button' },
+      text: cloudBusy ? t('cloudBusy') : t('cloudBackupNow'),
+    });
+    backupButton.disabled = cloudBusy;
+    backupButton.addEventListener('click', () => {
+      void uploadToCloud();
+    });
+
+    const refreshButton = el('button', {
+      className: 'btn btn-secondary',
+      attrs: { type: 'button' },
+      text: t('cloudRefresh'),
+    });
+    refreshButton.disabled = cloudBusy;
+    refreshButton.addEventListener('click', () => {
+      if (cloudBusy) return;
+      cloudBusy = true;
+      cloudError = '';
+      rebuild();
+      void refreshCloudList().finally(() => {
+        cloudBusy = false;
+        rebuild();
+      });
+    });
+
+    const signOutButton = el('button', {
+      className: 'btn btn-secondary',
+      attrs: { type: 'button' },
+      text: t('cloudSignOut'),
+    });
+    signOutButton.disabled = cloudBusy;
+    signOutButton.addEventListener('click', () => {
+      void leaveCloud();
+    });
+
+    parts.push(el('div', { className: 'settings-actions' }, [backupButton, refreshButton, signOutButton]));
+
+    if (cloudList === null) {
+      parts.push(el('p', { className: 'settings-text', text: t('loading') }));
+    } else if (cloudList.length === 0) {
+      parts.push(el('p', { className: 'settings-text', text: t('cloudEmpty') }));
+    } else {
+      parts.push(el('h4', { className: 'import-preview-title', text: t('cloudListTitle') }));
+      cloudList.forEach((meta) => {
+        const restoreButton = el('button', {
+          className: 'btn btn-secondary',
+          attrs: { type: 'button' },
+          text: t('cloudRestore'),
+        });
+        restoreButton.disabled = cloudBusy;
+        restoreButton.addEventListener('click', () => {
+          void restoreFromCloud(meta);
+        });
+
+        const deleteButton = el('button', {
+          className: 'btn btn-danger',
+          attrs: { type: 'button' },
+          text: t('delete'),
+        });
+        deleteButton.disabled = cloudBusy;
+        deleteButton.addEventListener('click', () => {
+          void removeFromCloud(meta);
+        });
+
+        parts.push(
+          el('div', { className: 'cloud-item' }, [
+            el('p', {
+              className: 'import-meta',
+              text: t('cloudItemLine', {
+                time: formatCloudTime(meta.created_at),
+                items: meta.item_count,
+                events: meta.event_count,
+                device: meta.device_label ?? '-',
+              }),
+            }),
+            el('div', { className: 'settings-actions' }, [restoreButton, deleteButton]),
+          ]),
+        );
+      });
+    }
+
+    parts.push(
+      el('p', {
+        className: 'form-error',
+        attrs: { role: 'alert', 'aria-live': 'assertive' },
+        text: cloudError,
+      }),
+    );
+
+    return el('section', { className: 'settings-section' }, parts);
+  };
+
   const rebuild = (): void => {
     sheet?.setChrome(t('settingsTitle'), t('close'));
 
@@ -501,6 +828,7 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
           : null,
         previewNode,
       ]),
+      buildCloudSection(),
       el('section', { className: 'settings-section' }, [
         el('h3', { className: 'section-title', text: t('migrationTitle') }),
         el('ol', { className: 'settings-text migration-steps' }, [
@@ -531,4 +859,12 @@ export function openSettingsSheet(options: SettingsSheetOptions): void {
   });
 
   rebuild();
+
+  void (async () => {
+    if (!isCloudConfigured()) return;
+    cloudSession = await getCloudSession();
+    if (!cloudSession) return;
+    await refreshCloudList();
+    rebuild();
+  })();
 }

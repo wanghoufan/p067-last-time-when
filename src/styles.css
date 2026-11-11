@@ -838,6 +838,22 @@ button {
   margin-bottom: 8px;
 }
 
+.cloud-item {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.cloud-item .import-meta {
+  margin: 0 0 10px;
+}
+
+.cloud-item .settings-actions {
+  margin-bottom: 0;
+}
+
 .app-version {
   margin-top: 12px;
   color: var(--muted);
