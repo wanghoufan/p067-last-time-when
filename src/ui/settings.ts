@@ -36,7 +36,7 @@ import { openSheet, type SheetHandle } from './sheet';
 import { applyTheme } from './theme';
 import { showToast } from './toast';
 
-export const APP_VERSION = '0.1.4+20261111';
+export const APP_VERSION = '0.1.5+20261112';
 
 export interface SettingsSheetOptions {
   snapshot: Snapshot;

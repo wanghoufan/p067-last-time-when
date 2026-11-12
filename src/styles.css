@@ -586,6 +586,16 @@ button {
   flex: 1 1 0;
 }
 
+/* 三个按钮放不下时换行，避免按钮文字被压扁或溢出。 */
+.form-actions--wrap {
+  flex-wrap: wrap;
+}
+
+.form-actions--wrap .btn {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
 .boot-error .btn {
   margin-top: 8px;
 }
